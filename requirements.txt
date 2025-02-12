@@ -1,0 +1,4 @@
+weasyprint
+requests
+pandas
+streamlit
