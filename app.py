@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
-from database.api_futbol import obtener_partidos
-import weasyprint
+import requests  
+from fpdf import FPDF
 
 # Configurar la página
 st.set_page_config(page_title="Mi Aplicación Streamlit", layout="centered")
@@ -28,7 +28,7 @@ if not st.session_state.authenticated:
 
 st.sidebar.success("✅ Sesión iniciada")
 st.title("🎉 Bienvenido a la Aplicación")
-st.write("Aquí irá el contenido principal de la app.")
+st.write("¡Bienvenido a la aplicación de fútbol! Selecciona una competición para ver los partidos.")
 
 # Mapa de competiciones y sus códigos
 competicion_codes = {
@@ -54,6 +54,19 @@ competicion = st.sidebar.selectbox("Selecciona la competición:", list(competici
 st.write(f"📅 Partidos de la {competicion}")
 competicion_code = competicion_codes.get(competicion)
 
+@st.cache_data
+def obtener_partidos(competicion="PL"):
+    url = f"https://api.football-data.org/v4/competitions/{competicion}/matches"
+    headers = {"X-Auth-Token": "2237852967a142e9ad6302f2ed07c45f"}  # Asegúrate de poner tu API key aquí
+    
+    response = requests.get(url, headers=headers)
+    
+    if response.status_code == 200:
+        return response.json()  # Devuelve los datos en formato JSON
+    else:
+        st.error(f"Error {response.status_code}: {response.text}")
+        return None
+
 if competicion_code:
     datos = obtener_partidos(competicion=competicion_code)
 
@@ -69,19 +82,28 @@ if competicion_code:
         df_partidos = pd.DataFrame(partidos_lista)
         st.dataframe(df_partidos)
 
-        # Función para exportar a PDF
+        # Función para exportar a PDF con fpdf
         def exportar_a_pdf(df_partidos):
-            html_content = df_partidos.to_html()  # Convertir el DataFrame en HTML
-            pdf = weasyprint.HTML(string=html_content).write_pdf()  # Convertir HTML a PDF
-            
-            # Guardar el archivo PDF en la carpeta del proyecto
-            with open("partidos.pdf", "wb") as f:
-                f.write(pdf)
+            pdf = FPDF()
+            pdf.set_auto_page_break(auto=True, margin=15)
+            pdf.add_page()
+
+            pdf.set_font("Arial", size=12)
+
+            # Título
+            pdf.cell(200, 10, txt="Partidos de Fútbol", ln=True, align="C")
+
+            # Añadir los datos de la tabla
+            for index, row in df_partidos.iterrows():
+                pdf.cell(200, 10, txt=f"{row['Fecha']} - {row['Local']} vs {row['Visitante']}", ln=True)
+
+            # Guardar el PDF
+            pdf.output("partidos.pdf")
 
             st.success("PDF generado correctamente. Haz clic para descargar.")
             st.download_button(
                 label="Descargar PDF",
-                data=pdf,
+                data=open("partidos.pdf", "rb").read(),
                 file_name="partidos.pdf",
                 mime="application/pdf"
             )
@@ -105,4 +127,3 @@ else:
 if st.sidebar.button("Cerrar Sesión"):
     st.session_state.authenticated = False
     st.rerun()
-
